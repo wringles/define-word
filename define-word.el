@@ -65,7 +65,8 @@ By default, `message' is used."
   '((wordnik "http://wordnik.com/words/%s" define-word--parse-wordnik)
     (openthesaurus "https://www.openthesaurus.de/synonyme/%s" define-word--parse-openthesaurus)
     (webster "http://webstersdictionary1828.com/Dictionary/%s" define-word--parse-webster)
-    (offline-wikitionary define-word--get-offline-wikitionary nil))
+    (offline-wikitionary define-word--get-offline-wikitionary nil)
+    (langenscheidt "https://en.langenscheidt.com/german-english/%s" define-word--parse-langenscheidt))
   "Services for define-word, A list of lists of the
   format (symbol url function-for-parsing).
 Instead of an url string, url can be a custom function for retrieving results."
@@ -83,6 +84,7 @@ Instead of an url string, url can be a custom function for retrieving results."
           (const openthesaurus)
           (const webster)
           (const offline-wikitionary)
+          (const langenscheidt)
           symbol))
 
 (defvar define-word-offline-dict-directory nil
@@ -228,6 +230,20 @@ In a non-interactive call SERVICE can be passed."
         (when (re-search-forward "</li>")
           (push (concat (propertize part 'face 'define-word-face-1)
                         (propertize
+                         (buffer-substring-no-properties beg (match-beginning 0))
+                         'face 'define-word-face-2))
+                results)))
+      (when (setq results (nreverse results))
+        (define-word--convert-html-tag-to-face (define-word--join-results results))))))
+
+(defun define-word--parse-langenscheidt ()
+  "Parse output from langenscheidt site and return formatted list"
+  (save-match-data
+    (let (results beg part)
+      (while (re-search-forward "<span class=\"btn-inner\"> " nil t)
+        (setq beg (point))
+        (when (re-search-forward "</span>")
+          (push (concat (propertize
                          (buffer-substring-no-properties beg (match-beginning 0))
                          'face 'define-word-face-2))
                 results)))
