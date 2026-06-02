@@ -3,7 +3,7 @@
 ;; Copyright (C) 2015 Oleh Krehel
 
 ;; Author: Oleh Krehel <ohwoeowho@gmail.com>
-;; URL: https://github.com/abo-abo/define-word
+;; URL: https://github.com/abo/define-word
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "24.3"))
 ;; Keywords: dictionary, convenience
@@ -35,6 +35,8 @@
 ;;
 ;; The HTML page is retrieved asynchronously, using `url-retrieve-link'.
 ;;
+;; Changed to send request to Cambridge German-English dictionary by default
+;; 
 ;;; Code:
 
 (require 'url-parse)
@@ -65,8 +67,9 @@ By default, `message' is used."
   '((wordnik "http://wordnik.com/words/%s" define-word--parse-wordnik)
     (openthesaurus "https://www.openthesaurus.de/synonyme/%s" define-word--parse-openthesaurus)
     (webster "http://webstersdictionary1828.com/Dictionary/%s" define-word--parse-webster)
-    (offline-wikitionary define-word--get-offline-wikitionary nil)
-    (langenscheidt "https://en.langenscheidt.com/german-english/%s" define-word--parse-langenscheidt))
+    (offline-wiktionary define-word--get-offline-wiktionary nil)
+    (cambridge "https://dictionary.cambridge.org/dictionary/german-english/%s"
+               define-word--get-offline-cambridge nil))
   "Services for define-word, A list of lists of the
   format (symbol url function-for-parsing).
 Instead of an url string, url can be a custom function for retrieving results."
@@ -76,21 +79,21 @@ Instead of an url string, url can be a custom function for retrieving results."
                        (string :tag "Url (%s denotes search word)")
                        (function :tag "Parsing function"))))
 
-(defcustom define-word-default-service 'wordnik
+(defcustom define-word-default-service 'cambridge
   "The default service for define-word commands. Must be one of
   `define-word-services'"
   :type '(choice
           (const wordnik)
           (const openthesaurus)
           (const webster)
-          (const offline-wikitionary)
-          (const langenscheidt)
+          (const offline-wiktionary)
+          (const cambridge)
           symbol))
 
 (defvar define-word-offline-dict-directory nil
   "Path to the directory which contains \"en-en-withforms-enwiktionary.txt\".")
 
-(defun define-word--get-offline-wikitionary (word)
+(defun define-word--get-offline-wiktionary (word)
   (unless define-word-offline-dict-directory
     (let ((url "https://en.wiktionary.org/wiki/User:Matthias_Buchmeier/download"))
       (user-error "Please download the ding (text-format) zip from %s and configure `%S'." url
@@ -108,7 +111,8 @@ Instead of an url string, url can be a custom function for retrieving results."
          (retriever (nth 1 servicedata))
          (parser (nth 2 servicedata))
          (url-user-agent
-          (if (eq (nth 0 servicedata) 'wordnik)
+          (if (or (eq (nth 0 servicedata) 'wordnik)
+                  (eq (nth 0 servicedata) 'cambridge))
               "Mozilla/5.0 (Macintosh; Intel Mac OS X 11_5_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.4577.63 Safari/537.36"
             url-user-agent)))
     (if (functionp retriever)
@@ -236,19 +240,13 @@ In a non-interactive call SERVICE can be passed."
       (when (setq results (nreverse results))
         (define-word--convert-html-tag-to-face (define-word--join-results results))))))
 
-(defun define-word--parse-langenscheidt ()
-  "Parse output from langenscheidt site and return formatted list"
+(defun define-word--parse-cambridge ()
+  "Parse output from cambridge german-english site and return formatted list"
   (save-match-data
-    (let (results beg part)
-      (while (re-search-forward "<span class=\"btn-inner\"> " nil t)
-        (setq beg (point))
-        (when (re-search-forward "</span>")
-          (push (concat (propertize
-                         (buffer-substring-no-properties beg (match-beginning 0))
-                         'face 'define-word-face-2))
-                results)))
-      (when (setq results (nreverse results))
-        (define-word--convert-html-tag-to-face (define-word--join-results results))))))
+    (let (results)
+      (while (re-search-forward "translate: \\(.+\\) Learn more in the Cambridge" nil t)
+        (push (propertize (match-string 1) 'face 'define-word-face-1) results))
+      (define-word--join-results results))))
 
 (defun define-word--parse-webster ()
   "Parse definition from webstersdictionary1828.com."
